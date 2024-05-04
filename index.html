@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>宿泊者名簿</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #007BFF;
+            color: #ffffff;
+            padding: 10px 20px;
+            text-align: center;
+        }
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:hover {background-color: #f5f5f5;}
+        button {
+            padding: 5px 10px;
+            margin: 2px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .modal, .modal2 {
+            display: none;
+            position: fixed;
+            z-index: 2;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content, .modal-content2 {
+            background-color: #fefefe;
+            margin: auto;
+            position: relative;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 30%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover, .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        input[type="text"] {
+            padding: 10px;
+            margin-top: 20px;
+            width: 90%;
+        }
+        /* Loading Indicator Styles */
+        .loading {
+            display: none;
+            position: fixed;
+            z-index: 3;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader {
+            border: 16px solid #f3f3f3; /* Light grey */
+            border-top: 16px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>宿泊者名簿</h1>
+    </header>
+    <div class="loading" id="loadingIndicator">
+        <div class="loader"></div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>名前</th>
+                <th>チェックイン日時</th>
+                <th>部屋番号</th>
+                <th>布団番号</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="data-list">
+        </tbody>
+    </table>
+
+    <!-- Phone Number Input Modal -->
+    <div id="phoneModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('phoneModal')">&times;</span>
+            <p>チェックインの確認です。電話番号を入力してください:</p>
+            <input type="text" id="phoneInput" placeholder="電話番号を入力">
+            <button onclick="submitPhone()">送信</button>
+        </div>
+    </div>
+
+    <!-- Secret Code Display Modal -->
+    <div id="codeModal" class="modal2">
+        <div class="modal-content2">
+            <span class="close" onclick="closeModal('codeModal')">&times;</span>
+            <p id="secretCode">暗証番号はこちらです。</p>
+            <button onclick="reloadPage()">OK</button> <!-- Button to close modal and reload page -->
+        </div>
+    </div>
+
+    <script>
+        var api_url = 'https://script.google.com/macros/s/AKfycbzGTAoLMjDS_3GcBtLk_hTmkccTEKoCMhghjiJ47CFbkPXpva4g8q_GN__tPNrxWelT4Q/exec';
+
+        function toggleLoading(show) {
+            var loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = show ? 'flex' : 'none';
+        }
+
+        toggleLoading(true);  // Show loading when fetching data
+        fetch(api_url)
+        .then(function (fetch_data) {
+            toggleLoading(false);  // Hide loading after fetching data
+            if (!fetch_data.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return fetch_data.json();
+        })
+        .then(function (json) {
+            var dataList = document.getElementById('data-list');
+            json.forEach(function(item) {
+                var row = document.createElement('tr');
+                row.innerHTML = `<td>${item.guest_name}</td>
+                                 <td>${item.check_in_datetime}</td>
+                                 <td>${item.room_number}</td>
+                                 <td>${item.futon_number}</td>
+                                 <td><button onclick="showPhoneModal('${item.guest_name}', '${item.phone_number}')">チェックイン</button></td>`;
+                dataList.appendChild(row);
+            });
+        })
+        .catch(function (error) {
+            console.error('Fetch error:', error);
+        });
+
+        function showPhoneModal(name, phone) {
+            var modal = document.getElementById("phoneModal");
+            modal.style.display = "block";
+            guestName = name; // Store the guest name when the modal is shown
+            correctPhone = phone;
+        }
+
+        function submitPhone() {
+            toggleLoading(true);  // Show loading when submitting data
+            var phoneInput = document.getElementById("phoneInput").value;
+            var postData = new URLSearchParams({
+                guest_name: guestName,
+                phone_number: phoneInput
+            });
+
+            fetch('https://script.google.com/macros/s/AKfycbzGTAoLMjDS_3GcBtLk_hTmkccTEKoCMhghjiJ47CFbkPXpva4g8q_GN__tPNrxWelT4Q/exec', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: postData.toString()
+            })
+            .then(response => response.json())
+            .then(data => {
+                toggleLoading(false);  // Hide loading after receiving response
+                if (data.pin_number) {
+                    document.getElementById("secretCode").innerHTML = `電話番号が正しいです。${guestName}さんの暗証番号は${data.pin_number}です。`;
+                    showModal('codeModal');
+                    closeModal('phoneModal');
+                } else {
+                    document.getElementById("secretCode").innerHTML = "電話番号が違います。再度入力してください";
+                    showModal('codeModal');
+                }
+            })
+            .catch(error => {
+                toggleLoading(false);  // Hide loading if an error occurs
+                console.error('Error:', error);
+                document.getElementById("secretCode").innerHTML = "エラーが発生しました。もう一度試してください。";
+                showModal('codeModal');
+            });
+        }
+
+        function showModal(modalId) {
+            var modal = document.getElementById(modalId);
+            modal.style.display = "block";
+        }
+
+        function closeModal(modalId) {
+            var modal = document.getElementById(modalId);
+            modal.style.display = "none";
+        }
+
+        function reloadPage() {
+            window.location.reload();
+        }
+
+        window.onclick = function(event) {
+            var phoneModal = document.getElementById("phoneModal");
+            var codeModal = document.getElementById("codeModal");
+            if (event.target == phoneModal || event.target == codeModal) {
+                closeModal('phoneModal');
+                closeModal('codeModal');
+            }
+        }
+    </script>
+</body>
+</html>
